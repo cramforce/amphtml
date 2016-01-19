@@ -58,6 +58,8 @@ export class Framerate {
      */
     this.loadedAd_ = false;
 
+    this.boundHandleFrame_ = this.handleFrame_.bind(this);
+
     const viewer = viewerFor(this.win);
 
     /**
@@ -125,19 +127,22 @@ export class Framerate {
       this.reset_();
       return;
     }
-    this.requestedFrame_ = this.win.requestAnimationFrame(() => {
-      this.requestedFrame_ = null;
-      const lastFrameTime = this.lastFrameTime_;
-      const now = this.lastFrameTime_ = timer.now();
-      if (lastFrameTime != 0 &&
-          // Chrome bug?
-          lastFrameTime != now) {
-        this.frameCount_++;
-      }
-      this.requestFrame_(now);
-    });
+    this.requestedFrame_ = this.win.requestAnimationFrame(
+        this.boundHandleFrame_);
   }
 
+  /** @private  */
+  handleFrame_() {
+    this.requestedFrame_ = null;
+    const lastFrameTime = this.lastFrameTime_;
+    const now = this.lastFrameTime_ = timer.now();
+    if (lastFrameTime != 0 &&
+        // Chrome bug?
+        lastFrameTime != now) {
+      this.frameCount_++;
+    }
+    this.requestFrame_(now);
+  }
 };
 
 

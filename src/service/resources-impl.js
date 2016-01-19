@@ -499,6 +499,9 @@ export class Resources {
    * @param {number=} opt_delay
    */
   schedulePass(opt_delay) {
+    if (!this.firstPassAfterDocumentReady_ && !this.viewer.isVisible()) {
+      return;
+    }
     this.pass_.schedule(opt_delay);
   }
 
