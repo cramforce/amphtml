@@ -16,7 +16,7 @@
 
 import {ANALYTICS_CONFIG} from './vendors';
 import {addListener} from './instrumentation';
-import {assertHttpsUrl} from '../../../src/url';
+import {assertHttpsUrl, addParamsToUrl} from '../../../src/url';
 import {expandTemplate} from '../../../src/string';
 import {installCidService} from '../../../src/service/cid-impl';
 import {installStorageService} from '../../../src/service/storage-impl';
@@ -287,6 +287,9 @@ export class AmpAnalytics extends AMP.BaseElement {
           (this.config_['vars'] && this.config_['vars'][name]) || '');
       return val + argList;
     });
+    if (this.config_['customVars']) {
+      request = addParamsToUrl(request, this.config_['customVars']);
+    }
     this.config_['vars']['requestCount']++;
 
     // For consistentcy with amp-pixel we also expand any url replacements.

@@ -57,6 +57,26 @@ export const ANALYTICS_CONFIG = {
     }
   },
 
+  'adobeanalytics': {
+    'vars': {
+      'pageName': '',
+      'cdp': '',
+      'host': '',
+      'customerId': '',
+    },
+    'requests': {
+      'requestPath': '/b/ss/${customerId}/1/H.25.3/',
+      'basePrefix': 's=${screenWidth}x${screenHeight}' +
+          '&ch=${title}' +
+          '&c=${screenColorDepth}' +
+          '&cdp=${cdp}' +
+          '&pageName=${pageName}' +
+          '&g=${canonicalUrl}' +
+          '&r=${documentReferrer}',
+      'pageview': 'https://${host}${requestPath}?${basePrefix}',
+    },
+  },
+
   'googleanalytics': {
     'vars': {
       'eventValue': "0",

@@ -81,6 +81,27 @@
 </script>
 </amp-analytics>
 
+<amp-analytics type="adobeanalytics" id="analytics_adobe">
+<script type="application/json">
+{
+  "vars": {
+    "host": "hits-secure.theguardian.com",
+    "customerId": "guardiangu-network"
+  },
+  "customVars": {
+    "c9": "Article",
+    "c11": "us-news"
+  },
+  "triggers": {
+    "defaultPageview": {
+      "on": "visible",
+      "request": "pageview"
+    }
+  }
+}
+</script>
+</amp-analytics>
+
 <amp-analytics id="analytics3" config="./analytics.config.json"></amp-analytics>
 
 <div class="logo"></div>
