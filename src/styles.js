@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+import {setStyles} from './style';
+
 
 /**
  * Adds the given css text to the given document.
@@ -32,10 +34,9 @@
  *     after.
  */
 export function installStyles(doc, cssText, cb, opt_isRuntimeCss) {
-  var length = doc.styleSheets.length;
-  var style = doc.createElement('style');
+  const style = doc.createElement('style');
   style.textContent = cssText;
-  var afterElement = null;
+  let afterElement = null;
   // Make sure that we place style tags after the main runtime CSS. Otherwise
   // the order is random.
   if (opt_isRuntimeCss) {
@@ -48,10 +49,10 @@ export function installStyles(doc, cssText, cb, opt_isRuntimeCss) {
   // pending style download, it will have to finish before the new
   // style is visible.
   // For this reason we poll until the style becomes available.
-  var done = () => {
-    var sheets = doc.styleSheets;
-    for (var i = 0; i < sheets.length; i++) {
-      var sheet = sheets[i];
+  const done = () => {
+    const sheets = doc.styleSheets;
+    for (let i = 0; i < sheets.length; i++) {
+      const sheet = sheets[i];
       if (sheet.ownerNode == style) {
         return true;
       }
@@ -64,7 +65,7 @@ export function installStyles(doc, cssText, cb, opt_isRuntimeCss) {
     return;
   }
   // Poll until styles are available.
-  var interval = setInterval(() => {
+  const interval = setInterval(() => {
     if (done()) {
       clearInterval(interval);
       cb();
@@ -77,17 +78,31 @@ export function installStyles(doc, cssText, cb, opt_isRuntimeCss) {
  * If the body is not yet available (because our script was loaded
  * synchronously), polls until it is.
  * @param {!Document} doc The document who's body we should make visible.
+ * @param {?Promise=} extensionsPromise A loading promise for special extensions
+ *     which must load before the body can be made visible
  */
-export function makeBodyVisible(doc) {
+export function makeBodyVisible(doc, extensionsPromise) {
   let interval;
-  let set = () => {
+  const set = () => {
     if (doc.body) {
-      doc.body.style.opacity = 1;
+      setStyles(doc.body, {
+        opacity: 1,
+        visibility: 'visible',
+        animation: 'none'
+      });
       clearInterval(interval);
     }
   };
-  interval = setInterval(set, 4);
-  set();
+  const poll = () => {
+    interval = setInterval(set, 4);
+    set();
+  };
+
+  if (extensionsPromise) {
+    extensionsPromise.then(poll, poll);
+  } else {
+    poll();
+  }
 }
 
 

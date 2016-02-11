@@ -29,15 +29,14 @@ describe('exponentialBackoff', () => {
   });
 
   afterEach(() => {
-    clock.restore();
     sandbox.restore();
   });
 
   it('should backoff exponentially', () => {
-    var count = 0;
-    var backoff = exponentialBackoff();
-    var backoff2 = exponentialBackoff();
-    var increment = () => {
+    let count = 0;
+    const backoff = exponentialBackoff();
+    const backoff2 = exponentialBackoff();
+    const increment = () => {
       count++;
     };
 

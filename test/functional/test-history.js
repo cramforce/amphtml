@@ -15,7 +15,7 @@
  */
 
 import {History, HistoryBindingNatural_, HistoryBindingVirtual_} from
-    '../../src/history';
+    '../../src/service/history-impl';
 import {listenOncePromise} from '../../src/event-helper';
 import * as sinon from 'sinon';
 
@@ -32,13 +32,13 @@ describe('History', () => {
     sandbox = sinon.sandbox.create();
     clock = sandbox.useFakeTimers();
 
-    let binding = {
+    const binding = {
       cleanup_: () => {},
-      setOnStackIndexUpdated: (callback) => {
+      setOnStackIndexUpdated: callback => {
         onStackIndexUpdated = callback;
       },
       push: () => {},
-      pop(stackIndex) {}
+      pop(unusedStackIndex) {}
     };
     bindingMock = sandbox.mock(binding);
 
@@ -50,23 +50,22 @@ describe('History', () => {
     bindingMock = null;
     history.cleanup_();
     history = null;
-    clock.restore();
     clock = null;
     sandbox.restore();
     sandbox = null;
   });
 
-  it.skipOnFirefox('should initialize correctly', () => {
-    expect(history.stackIndex_).to.equal(window.history.length - 1);
+  it('should initialize correctly', () => {
+    expect(history.stackIndex_).to.equal(0);
     expect(history.stackOnPop_.length).to.equal(0);
     expect(onStackIndexUpdated).to.not.equal(null);
   });
 
   it('should push new state', () => {
-    let onPop = sinon.spy();
-    bindingMock.expects('push').withExactArgs().
-        returns(Promise.resolve(11)).once();
-    return history.push(onPop).then((historyId) => {
+    const onPop = sinon.spy();
+    bindingMock.expects('push').withExactArgs()
+        .returns(Promise.resolve(11)).once();
+    return history.push(onPop).then(unusedHistoryId => {
       expect(history.stackIndex_).to.equal(11);
       expect(history.stackOnPop_.length).to.equal(12);
       expect(history.stackOnPop_[11]).to.equal(onPop);
@@ -75,12 +74,12 @@ describe('History', () => {
   });
 
   it('should pop previously pushed state', () => {
-    let onPop = sinon.spy();
-    bindingMock.expects('push').withExactArgs().
-        returns(Promise.resolve(11)).once();
-    bindingMock.expects('pop').withExactArgs(11).
-        returns(Promise.resolve(10)).once();
-    return history.push(onPop).then((historyId) => {
+    const onPop = sinon.spy();
+    bindingMock.expects('push').withExactArgs()
+        .returns(Promise.resolve(11)).once();
+    bindingMock.expects('pop').withExactArgs(11)
+        .returns(Promise.resolve(10)).once();
+    return history.push(onPop).then(historyId => {
       expect(historyId).to.equal(11);
       expect(history.stackOnPop_.length).to.equal(12);
       expect(history.stackOnPop_[11]).to.equal(onPop);
@@ -95,10 +94,10 @@ describe('History', () => {
   });
 
   it('should return and call callback when history popped', () => {
-    let onPop = sinon.spy();
-    bindingMock.expects('push').withExactArgs().
-        returns(Promise.resolve(11)).once();
-    return history.push(onPop).then((historyId) => {
+    const onPop = sinon.spy();
+    bindingMock.expects('push').withExactArgs()
+        .returns(Promise.resolve(11)).once();
+    return history.push(onPop).then(unusedHistoryId => {
       expect(onPop.callCount).to.equal(0);
       onStackIndexUpdated(10);
       clock.tick(1);
@@ -129,7 +128,6 @@ describe('HistoryBindingNatural', () => {
   afterEach(() => {
     history.cleanup_();
     history = null;
-    clock.restore();
     clock = null;
     sandbox.restore();
     sandbox = null;
@@ -147,7 +145,7 @@ describe('HistoryBindingNatural', () => {
     history.origPushState_({'AMP.History': window.history.length}, undefined);
     history.origReplaceState_({'AMP.History': window.history.length - 2},
         undefined);
-    let history2 = new HistoryBindingNatural_(window);
+    const history2 = new HistoryBindingNatural_(window);
     expect(history2.stackIndex_).to.equal(window.history.length - 2);
     expect(history2.startIndex_).to.equal(window.history.length - 2);
     expect(history.unsupportedState_['AMP.History']).to.equal(
@@ -176,8 +174,26 @@ describe('HistoryBindingNatural', () => {
     expect(onStackIndexUpdated.callCount).to.equal(0);
   });
 
+  // This prevents IE11/Edge from coercing undefined to become the new url
+  it('should not pass in `url` argument to original replace state if ' +
+    'parameter is undefined', () => {
+    const replaceStateSpy = sinon.spy();
+    const windowStub = {
+      history: {
+        replaceState: replaceStateSpy,
+        pushState: () => {},
+        state: {},
+        length: 11,
+      },
+      addEventListener: () => {},
+    };
+    new HistoryBindingNatural_(windowStub);
+    expect(replaceStateSpy.callCount).to.be.greaterThan(0);
+    expect(replaceStateSpy.lastCall.args.length).to.equal(2);
+  });
+
   it('should push new state in the window.history and notify', () => {
-    return history.push().then((stackIndex) => {
+    return history.push().then(stackIndex => {
       expect(history.stackIndex_).to.equal(stackIndex);
       expect(history.stackIndex_).to.equal(window.history.length - 1);
       expect(history.unsupportedState_['AMP.History']).to.equal(
@@ -189,32 +205,34 @@ describe('HistoryBindingNatural', () => {
   });
 
   it('should pop a state from the window.history and notify', () => {
-    return history.push().then((stackIndex) => {
+    return history.push().then(stackIndex => {
       expect(onStackIndexUpdated.callCount).to.equal(1);
       expect(onStackIndexUpdated.getCall(0).args[0]).to.equal(
           window.history.length - 1);
-      let histPromise = listenOncePromise(window, 'popstate').then(() => {
+      const histPromise = listenOncePromise(window, 'popstate').then(() => {
         clock.tick(100);
       });
-      let popPromise = history.pop(stackIndex);
-      return Promise.all([histPromise, popPromise]).then((results) => {
-        expect(results[1]).to.equal(window.history.length - 2);
-        expect(history.stackIndex_).to.equal(window.history.length - 2);
-        expect(history.unsupportedState_['AMP.History']).to.equal(
-            window.history.length - 2);
-        expect(onStackIndexUpdated.callCount).to.equal(2);
-        expect(onStackIndexUpdated.getCall(1).args[0]).to.equal(
-            window.history.length - 2);
+      const popPromise = history.pop(stackIndex);
+      return histPromise.then(unusedHist => {
+        return popPromise.then(pop => {
+          expect(pop).to.equal(window.history.length - 2);
+          expect(history.stackIndex_).to.equal(window.history.length - 2);
+          expect(history.unsupportedState_['AMP.History']).to.equal(
+              window.history.length - 2);
+          expect(onStackIndexUpdated.callCount).to.equal(2);
+          expect(onStackIndexUpdated.getCall(1).args[0]).to.equal(
+              window.history.length - 2);
+        });
       });
     });
   });
 
   it('should update its state and notify on history.back', () => {
-    return history.push().then((stackIndex) => {
+    return history.push().then(unusedStackIndex => {
       expect(onStackIndexUpdated.callCount).to.equal(1);
       expect(onStackIndexUpdated.getCall(0).args[0]).to.equal(
           window.history.length - 1);
-      let histPromise = listenOncePromise(window, 'popstate').then(() => {
+      const histPromise = listenOncePromise(window, 'popstate').then(() => {
         clock.tick(100);
       });
       window.history.go(-1);
@@ -246,13 +264,13 @@ describe('HistoryBindingVirtual', () => {
     clock = sandbox.useFakeTimers();
     onStackIndexUpdated = sinon.spy();
     viewerHistoryPoppedHandler = undefined;
-    let viewer = {
-      onHistoryPoppedEvent: (handler) => {
+    const viewer = {
+      onHistoryPoppedEvent: handler => {
         viewerHistoryPoppedHandler = handler;
         return () => {};
       },
-      postPushHistory: (stackIndex) => {},
-      postPopHistory: (stackIndex) => {}
+      postPushHistory: unusedStackIndex => {},
+      postPopHistory: unusedStackIndex => {}
     };
     viewerMock = sandbox.mock(viewer);
     history = new HistoryBindingVirtual_(viewer);
@@ -264,7 +282,6 @@ describe('HistoryBindingVirtual', () => {
     viewerMock = null;
     history.cleanup_();
     history = null;
-    clock.restore();
     clock = null;
     sandbox.restore();
     sandbox = null;
@@ -278,7 +295,7 @@ describe('HistoryBindingVirtual', () => {
 
   it('should push new state to viewer and notify', () => {
     viewerMock.expects('postPushHistory').withExactArgs(1).once();
-    return history.push().then((stackIndex) => {
+    return history.push().then(stackIndex => {
       expect(stackIndex).to.equal(1);
       expect(history.stackIndex_).to.equal(1);
       expect(onStackIndexUpdated.callCount).to.equal(1);
@@ -289,11 +306,11 @@ describe('HistoryBindingVirtual', () => {
   it('should pop a state from the window.history and notify', () => {
     viewerMock.expects('postPushHistory').withExactArgs(1).once();
     viewerMock.expects('postPopHistory').withExactArgs(1).once();
-    return history.push().then((stackIndex) => {
+    return history.push().then(stackIndex => {
       expect(stackIndex).to.equal(1);
       expect(onStackIndexUpdated.callCount).to.equal(1);
       expect(onStackIndexUpdated.getCall(0).args[0]).to.equal(1);
-      return history.pop(stackIndex).then((newStackIndex) => {
+      return history.pop(stackIndex).then(newStackIndex => {
         expect(newStackIndex).to.equal(0);
         expect(history.stackIndex_).to.equal(0);
         expect(onStackIndexUpdated.callCount).to.equal(2);
@@ -304,7 +321,7 @@ describe('HistoryBindingVirtual', () => {
 
   it('should update its state and notify on history.back', () => {
     viewerMock.expects('postPushHistory').withExactArgs(1).once();
-    return history.push().then((stackIndex) => {
+    return history.push().then(stackIndex => {
       expect(stackIndex).to.equal(1);
       expect(onStackIndexUpdated.callCount).to.equal(1);
       expect(onStackIndexUpdated.getCall(0).args[0]).to.equal(1);

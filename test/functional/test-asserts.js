@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {assert} from '../../src/asserts';
+import {assert, assertEnumValue} from '../../src/asserts';
 
 describe('asserts', () => {
 
@@ -37,14 +37,14 @@ describe('asserts', () => {
     expect(function() {
       assert(false, 'should fail %s %s', 'XYZ', 'YYY');
     }).to.throw(/should fail XYZ YYY/);
-    var div = document.createElement('div');
+    const div = document.createElement('div');
     div.id = 'abc';
     div.textContent = 'foo';
     expect(function() {
       assert(false, 'should fail %s', div);
     }).to.throw(/should fail div#abc/);
 
-    var error;
+    let error;
     try {
       assert(false, '%s a %s b %s', 1, 2, 3);
     } catch (e) {
@@ -56,8 +56,8 @@ describe('asserts', () => {
   });
 
   it('should add element and assert info', () => {
-    var div = document.createElement('div');
-    var error;
+    const div = document.createElement('div');
+    let error;
     try {
       assert(false, '%s a %s b %s', div, 2, 3);
     } catch (e) {
@@ -66,5 +66,29 @@ describe('asserts', () => {
     expect(error).to.be.instanceof(Error);
     expect(error.associatedElement).to.equal(div);
     expect(error.fromAssert).to.equal(true);
+  });
+});
+
+
+describe('assertEnumValue', () => {
+
+  it('should return the enum value', () => {
+    const enum1 = {a: 'value1', b: 'value2'};
+    expect(assertEnumValue(enum1, 'value1')).to.equal('value1');
+    expect(assertEnumValue(enum1, 'value2')).to.equal('value2');
+  });
+
+  it('should fail with unknown enum value', () => {
+    const enum1 = {a: 'value1', b: 'value2'};
+    expect(() => assertEnumValue(enum1, 'value3'))
+        .to.throw('Unknown enum value: "value3"');
+    expect(() => assertEnumValue(enum1, 'value3', 'MyEnum'))
+        .to.throw('Unknown MyEnum value: "value3"');
+  });
+
+  it('should fail with values of different case', () => {
+    const enum1 = {a: 'value1', b: 'value2'};
+    expect(() => assertEnumValue(enum1, 'VALUE1'))
+        .to.throw('Unknown enum value: "VALUE1"');
   });
 });

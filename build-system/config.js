@@ -18,43 +18,51 @@ var path = require('path');
 
 var karmaConf = path.resolve('karma.conf.js');
 
-var testPaths = [
-  'test/**/*.js',
-  'extensions/**/test/**/*.js',
+var commonTestPaths = [
+  'test/_init_tests.js',
   'test/fixtures/**/*.html',
   {
     pattern: 'dist/**/*.js',
     included: false,
+    nocache: true,
   },
   {
-    pattern: 'build/**/*.js',
+    pattern: 'dist.tools/**/*.js',
     included: false,
-    served: true
+    nocache: true,
   },
   {
     pattern: 'examples/**/*',
     included: false,
-    served: true
+    nocache: true,
   },
   {
     pattern: 'dist.3p/**/*',
     included: false,
-    served: true
-  }
-];
+    nocache: true,
+  },
+]
+
+var testPaths = commonTestPaths.concat([
+  'test/**/*.js',
+  'extensions/**/test/**/*.js',
+]);
+
+var integrationTestPaths = commonTestPaths.concat([
+  'test/integration/**/*.js',
+  'extensions/**/test/integration/**/*.js',
+]);
 
 var karma = {
   default: {
     configFile: karmaConf,
-    files: testPaths,
     singleRun: true,
     client: {
-      captureConsole: false
+      captureConsole: false,
     }
   },
   firefox: {
     configFile: karmaConf,
-    files: testPaths,
     singleRun: true,
     browsers: ['Firefox'],
     client: {
@@ -66,7 +74,6 @@ var karma = {
   },
   safari: {
     configFile: karmaConf,
-    files: testPaths,
     singleRun: true,
     browsers: ['Safari'],
     client: {
@@ -75,18 +82,64 @@ var karma = {
       },
       captureConsole: false
     }
+  },
+  saucelabs: {
+    configFile: karmaConf,
+    reporters: ['dots', 'saucelabs'],
+    browsers: [
+      'SL_Chrome_android',
+      'SL_Chrome_latest',
+      'SL_Chrome_37',
+      'SL_Firefox_latest',
+      'SL_Safari_8',
+      'SL_Safari_9',
+      'SL_Edge_latest',
+      // TODO(#895) Enable these.
+      //'SL_iOS_9_1',
+      //'SL_IE_11',
+    ],
+    singleRun: true,
+    client: {
+      mocha: {
+        timeout: 10000
+      },
+      captureConsole: false,
+    },
+    captureTimeout: 120000,
+    browserDisconnectTimeout: 120000,
+    browserNoActivityTimeout: 120000,
   }
 };
 
 /** @const  */
 module.exports = {
   testPaths: testPaths,
+  integrationTestPaths: integrationTestPaths,
   karma: karma,
-  src: {
-    exclude: '!{node_modules,build,dist,dist.3p}/**/*.*',
-  },
-  srcGlobs: [
-    '**/*.{css,js,html,md}',
-    '!{node_modules,build,dist,dist.3p}/**/*.*',
+  lintGlobs: [
+    '**/*.js',
+    '!{node_modules,build,dist,dist.3p,dist.tools,' +
+        'third_party,build-system}/**/*.*',
+    '!{testing,examples,examples.build}/**/*.*',
+    // TODO: temporary, remove when validator is up to date
+    '!validator/**/*.*',
+    '!gulpfile.js',
+    '!karma.conf.js',
+    '!**/local-amp-chrome-extension/background.js',
+    '!extensions/amp-access/0.1/access-expr-impl.js',
   ],
+  presubmitGlobs: [
+    '**/*.{css,js,go}',
+    // This does match dist.3p/current, so we run presubmit checks on the
+    // built 3p binary. This is done, so we make sure our special 3p checks
+    // run against the entire transitive closure of deps.
+    '!{node_modules,build,examples.build,dist,dist.tools,' +
+        'dist.3p/[0-9]*,dist.3p/current-min}/**/*.*',
+    '!validator/node_modules/**/*.*',
+    '!build-system/tasks/presubmit-checks.js',
+    '!build/polyfills.js',
+    '!gulpfile.js',
+    '!third_party/**/*.*',
+  ],
+  changelogIgnoreFileTypes: /\.md|\.json|\.yaml|LICENSE|CONTRIBUTORS$/
 };

@@ -47,7 +47,7 @@ function clickHandlerFor(window) {
 /**
  * Intercept any click on the current document and prevent any
  * linking to an identifier from pushing into the history stack.
- * @visibleForTesting
+ * visibleForTesting
  */
 export class ClickHandler {
   /**
@@ -97,43 +97,57 @@ export function onDocumentElementClick_(e, viewport) {
     return;
   }
 
-  let target = closestByTag(e.target, 'A');
+  const target = closestByTag(e.target, 'A');
   if (!target) {
     return;
   }
 
   let elem = null;
-  let docElement = e.currentTarget;
-  let doc = docElement.ownerDocument;
-  let tgtLoc = parseUrl(target.href);
-  let curLoc = parseUrl(doc.location.href);
-  let tgtHref = `${tgtLoc.origin}${tgtLoc.pathname}`;
-  let curHref = `${curLoc.origin}${curLoc.pathname}`;
+  const docElement = e.currentTarget;
+  const doc = docElement.ownerDocument;
+  const win = doc.defaultView;
+
+  const tgtLoc = parseUrl(target.href);
+  if (!tgtLoc.hash) {
+    return;
+  }
+
+  const curLoc = parseUrl(win.location.href);
+  const tgtHref = `${tgtLoc.origin}${tgtLoc.pathname}${tgtLoc.search}`;
+  const curHref = `${curLoc.origin}${curLoc.pathname}${curLoc.search}`;
 
   // If the current target anchor link is the same origin + path
   // as the current document then we know we are just linking to an
   // identifier in the document.
-  if (tgtHref == curHref) {
-    // We prevent default so that the current click does not push
-    // into the history stack as this messes up the external documents
-    // history which contains the amp document.
-    e.preventDefault();
+  if (tgtHref != curHref) {
+    return;
+  }
 
-    let hash = tgtLoc.hash.slice(1);
-    elem = doc.getElementById(hash);
+  // We prevent default so that the current click does not push
+  // into the history stack as this messes up the external documents
+  // history which contains the amp document.
+  e.preventDefault();
 
-    if (!elem) {
-      // Fallback to anchor[name] if element with id is not found.
-      // Linking to an anchor element with name is obsolete in html5.
-      elem = doc.querySelector(`a[name=${hash}]`);
-    }
+  const hash = tgtLoc.hash.slice(1);
+  elem = doc.getElementById(hash);
 
-    if (elem) {
-      // TODO(dvoytenko): consider implementing animated scroll.
-      viewport.scrollIntoView(elem);
-    } else {
-      log.warn('documentElement',
-          `failed to find element with id=${hash} or a[name=${hash}]`);
-    }
+  if (!elem) {
+    // Fallback to anchor[name] if element with id is not found.
+    // Linking to an anchor element with name is obsolete in html5.
+    elem = doc.querySelector(`a[name=${hash}]`);
+  }
+
+  if (elem) {
+    // TODO(dvoytenko): consider implementing animated scroll.
+    viewport./*OK*/scrollIntoView(elem);
+  } else {
+    log.warn('documentElement',
+        `failed to find element with id=${hash} or a[name=${hash}]`);
+  }
+  const history = win.history;
+  // If possible do update the URL with the hash. As explained above
+  // we do replaceState to avoid messing with the container's history.
+  if (history.replaceState) {
+    history.replaceState(null, '', `#${hash}`);
   }
 };

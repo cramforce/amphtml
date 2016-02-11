@@ -52,15 +52,17 @@ class AmpSlides extends AMP.BaseElement {
 
     this.prevButton_ = document.createElement('button');
     this.prevButton_.textContent = '\u276E';
-    this.prevButton_.style.opacity = 0.6;
-    this.prevButton_.style.position = 'absolute';
-    this.prevButton_.style.zIndex = 10;
-    this.prevButton_.style.left = '16px';
-    this.prevButton_.style.top = '50%';
-    this.prevButton_.style.padding = '8px';
-    this.prevButton_.style.fontSize = '24px';
-    this.prevButton_.style.marginTop = '-20px';
-    this.prevButton_.style.pointerEvents = 'all';
+    st.setStyles(this.prevButton_, {
+      opacity: 0.6,
+      position: 'absolute',
+      zIndex: 10,
+      left: '16px',
+      top: '50%',
+      padding: '8px',
+      fontSize: '24px',
+      marginTop: '-20px',
+      pointerEvents: 'all'
+    });
     this.prevButton_.onclick = () => {
       this.go(-1, true);
     };
@@ -68,15 +70,17 @@ class AmpSlides extends AMP.BaseElement {
 
     this.nextButton_ = document.createElement('button');
     this.nextButton_.textContent = '\u276F';
-    this.nextButton_.style.opacity = 0.6;
-    this.nextButton_.style.position = 'absolute';
-    this.nextButton_.style.zIndex = 10;
-    this.nextButton_.style.right = '16px';
-    this.nextButton_.style.top = '50%';
-    this.nextButton_.style.padding = '8px';
-    this.nextButton_.style.fontSize = '24px';
-    this.nextButton_.style.marginTop = '-20px';
-    this.nextButton_.style.pointerEvents = 'all';
+    st.setStyles(this.nextButton_, {
+      opacity: 0.6,
+      position: 'absolute',
+      zIndex: 10,
+      right: '16px',
+      top: '50%',
+      padding: '8px',
+      fontSize: '24px',
+      marginTop: '-20px',
+      pointerEvents: 'all'
+    });
     this.nextButton_.onclick = () => {
       this.go(1, true);
     };
@@ -111,13 +115,12 @@ class AmpSlides extends AMP.BaseElement {
    * @param {boolean} animate
    */
   go(dir, animate) {
-    var newIndex = this.nextIndex_(dir);
+    const newIndex = this.nextIndex_(dir);
     if (newIndex != this.currentIndex_) {
-      var newSlide = this.slides_[newIndex];
-      var oldSlide = this.slides_[this.currentIndex_];
+      const newSlide = this.slides_[newIndex];
+      const oldSlide = this.slides_[this.currentIndex_];
       this.currentIndex_ = newIndex;
       this.prepareSlide_(newSlide, dir);
-      var containerWidth = this.element.offsetWidth;
       if (!animate) {
         this.commitSwitch_(oldSlide, newSlide);
       } else {
@@ -136,7 +139,7 @@ class AmpSlides extends AMP.BaseElement {
    * @param {number} dir
    */
   prepareSlide_(slide, dir) {
-    var containerWidth = this.element.offsetWidth;
+    const containerWidth = this.element./*OK*/offsetWidth;
     st.setStyles(slide, {
       transform: st.translateX(dir * containerWidth),
       zIndex: 1,
@@ -153,7 +156,7 @@ class AmpSlides extends AMP.BaseElement {
    * @return {!Transition}
    */
   createTransition_(oldSlide, newSlide, dir) {
-    var containerWidth = this.element.offsetWidth;
+    const containerWidth = this.element./*OK*/offsetWidth;
     return tr.all([
       tr.setStyles(newSlide, {
         transform: tr.translateX(tr.numeric(dir * containerWidth, 0)),
@@ -209,7 +212,7 @@ class AmpSlides extends AMP.BaseElement {
   preloadNext_(dir) {
     // TODO(dvoytenko): can we actually preload it here? There's no
     // guarantee of it has display!=none.
-    var nextIndex = this.nextIndex_(dir);
+    const nextIndex = this.nextIndex_(dir);
     if (nextIndex != this.currentIndex_) {
       this.schedulePreload(this.slides_[nextIndex]);
     }

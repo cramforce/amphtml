@@ -17,34 +17,33 @@
 import {createIframePromise} from '../../testing/iframe';
 import {BaseElement} from '../../src/base-element';
 import {installImg} from '../../builtins/amp-img';
+import * as error from '../../src/error';
 import * as sinon from 'sinon';
 
 describe('amp-img', () => {
-  let sandbox, methodStub;
+  let sandbox;
 
   beforeEach(() => {
     sandbox = sinon.sandbox.create();
   });
 
   afterEach(() => {
-    methodStub.restore();
-    methodStub = null;
     sandbox.restore();
     sandbox = null;
   });
 
   function getImg(attributes, children) {
-    methodStub = sinon.stub(BaseElement.prototype, 'isInViewport')
+    sandbox.stub(BaseElement.prototype, 'isInViewport')
         .returns(true);
-    return createIframePromise().then((iframe) => {
+    return createIframePromise().then(iframe => {
       installImg(iframe.win);
-      let img = iframe.doc.createElement('amp-img');
-      for (let key in attributes) {
+      const img = iframe.doc.createElement('amp-img');
+      for (const key in attributes) {
         img.setAttribute(key, attributes[key]);
       }
 
       if (children != null) {
-        for (let key in children) {
+        for (const key in children) {
           img.appendChild(children[key]);
         }
       }
@@ -57,25 +56,23 @@ describe('amp-img', () => {
       src: 'test.jpg',
       width: 300,
       height: 200
-    }).then((ampImg) => {
-      let img = ampImg.querySelector('img');
+    }).then(ampImg => {
+      const img = ampImg.querySelector('img');
       expect(img).to.be.an.instanceof(Element);
       expect(img.tagName).to.equal('IMG');
       expect(img.getAttribute('src')).to.equal('test.jpg');
     });
   });
 
-  // TODO(erwinm): Make stable
-  it.skip('should have a default placeholder', () => {
+  it('should send error report on error', () => {
+    const errorMock_ = sandbox.mock(error);
+    errorMock_.expects('reportError').once();
     return getImg({
-      src: 'test.jpg',
+      src: 'c/test404.jpg',
       width: 300,
       height: 200
-    }).then((ampImg) => {
-      let placeholder = ampImg.querySelector('.-amp-autoplaceholder');
-      expect(placeholder).to.not.be.null;
-      expect(placeholder.hasAttribute('placeholder')).to.be.true;
-      expect(placeholder).to.not.be.null;
+    }).then(ampImg => {
+      errorMock_.verify();
     });
   });
 });

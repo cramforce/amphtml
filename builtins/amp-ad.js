@@ -15,74 +15,26 @@
  */
 
 import {BaseElement} from '../src/base-element';
+import {IntersectionObserver} from '../src/intersection-observer';
+import {assert} from '../src/asserts';
+import {cidForOrNull} from '../src/cid';
+import {getIframe, prefetchBootstrap} from '../src/3p-frame';
 import {isLayoutSizeDefined} from '../src/layout';
-import {setStyles} from '../src/style';
+import {listen, listenOnce, postMessage} from '../src/iframe-helper';
 import {loadPromise} from '../src/event-helper';
+import {parseUrl} from '../src/url';
 import {registerElement} from '../src/custom-element';
-import {getIframe, listen} from '../src/3p-frame';
+import {adPrefetch, adPreconnect, clientIdScope} from '../ads/_config';
+import {toggle} from '../src/style';
+import {timer} from '../src/timer';
+import {viewerFor} from '../src/viewer';
+import {userNotificationManagerFor} from '../src/user-notification';
 
 
-/**
- * Preview phase only default backfill for ads. If the ad
- * cannot fill the slot one of these will be displayed instead.
- * @private @const
- */
-const BACKFILL_IMGS_ = {
-  '300x200': [
-    'backfill-1@1x.png',
-    'backfill-2@1x.png',
-    'backfill-3@1x.png',
-    'backfill-4@1x.png',
-    'backfill-5@1x.png',
-  ],
-  '320x50': [
-    'backfill-6@1x.png',
-    'backfill-7@1x.png',
-  ],
+/** @private @const These tags are allowed to have fixed positioning */
+const POSITION_FIXED_TAG_WHITELIST = {
+  'AMP-LIGHTBOX': true
 };
-
-/** @private @const */
-const BACKFILL_DIMENSIONS_ = [
-  [300, 200],
-  [320, 50],
-];
-
-/**
- * Preview phase helper to score images through their dimensions.
- * @param {!Array<!Array<number>>} dims
- * @param {number} maxWidth
- * @param {number} maxHeight
- * @visibleForTesting
- */
-export function scoreDimensions_(dims, maxWidth, maxHeight) {
-  return dims.map(function(dim) {
-    let [width, height] = dim;
-    let widthScore = Math.abs(width - maxWidth);
-    // if the width is over the max then we need to penalize it
-    let widthPenalty = Math.abs((maxWidth - width) * 3);
-    // we add a multiplier to height as we prioritize it more than width
-    let heightScore = Math.abs(height - maxHeight) * 2;
-    // if the height is over the max then we need to penalize it
-    let heightPenalty = Math.abs((maxHeight - height) * 2.5);
-
-    return (widthScore - widthPenalty) + (heightScore - heightPenalty);
-  });
-}
-
-/**
- * Preview phase helper to update a @1x.png string to @2x.png.
- * @param {!Object<string, !Array<string>>} images
- * @visibleForTesting
- */
-export function upgradeImages_(images) {
-  Object.keys(images).forEach((key) => {
-    let curDimImgs = images[key];
-    curDimImgs.forEach((item, index) => {
-      curDimImgs[index] = item.replace(/@1x\.png$/, '@2x.png');
-    });
-  });
-}
-
 
 /**
  * @param {!Window} win Destination window for the new element.
@@ -90,16 +42,25 @@ export function upgradeImages_(images) {
  * @return {undefined}
  */
 export function installAd(win) {
-  class AmpAd extends BaseElement {
 
-    /** @override */
-    createdCallback() {
-      this.preconnect.threePFrame();
-    }
+  /**
+   * @type {boolean} Heuristic boolean as for whether another ad is currently
+   *     loading.
+   */
+  let loadingAdsCount = 0;
+
+  class AmpAd extends BaseElement {
 
     /** @override  */
     renderOutsideViewport() {
-      return false;
+      // If another ad is currently loading we only load ads that are currently
+      // in viewport.
+      if (loadingAdsCount > 0) {
+        return false;
+      }
+
+      // Otherwise the ad is good to go.
+      return true;
     }
 
     /** @override */
@@ -108,97 +69,368 @@ export function installAd(win) {
     }
 
     /** @override */
-    createdCallback() {
+    isReadyToBuild() {
+      // TODO(dvoytenko, #1014): Review and try a more immediate approach.
+      // Wait until DOMReady.
+      return false;
+    }
+
+    /** @override */
+    isRelayoutNeeded() {
+      return true;
+    }
+
+    /** @override */
+    buildCallback() {
       /** @private {?Element} */
       this.iframe_ = null;
 
       /** @private {?Element} */
       this.placeholder_ = this.getPlaceholder();
 
-      /** @private {boolean} */
-      this.isDefaultPlaceholder_ = false;
+      /** @private {?Element} */
+      this.fallback_ = this.getFallback();
 
       /** @private {boolean} */
-      this.isDefaultPlaceholderSet_ = false;
+      this.isInFixedContainer_ = false;
+
+      /**
+       * The layout box of the ad iframe (as opposed to the amp-ad tag).
+       * In practice it often has padding to create a grey or similar box
+       * around ads.
+       * @private {!LayoutRect}
+       */
+      this.iframeLayoutBox_ = null;
+
+      /**
+       * Call to stop listening to viewport changes.
+       * @private {?function()}
+       */
+      this.unlistenViewportChanges_ = null;
+
+      /** @private {IntersectionObserver} */
+      this.intersectionObserver_ = null;
+
+      /**
+       * In this state the iframe is set to display: none to reduce
+       * CPU/GPU/Battery consumption by the ad.
+       * @private {boolean}
+       */
+      this.paused_ = false;
+
+      /**
+       * Whether this ad was ever in the viewport.
+       */
+      this.wasEverVisible_ = false;
+
+      /**
+       * @private @const
+       */
+      this.viewer_ = viewerFor(this.getWin());
     }
 
-    /** @override */
-    buildCallback() {
-      if (this.placeholder_) {
-        this.placeholder_.classList.add('hidden');
-      } else {
-        this.isDefaultPlaceholder_ = true;
-        if (this.getDpr() >= 0.5) {
-          upgradeImages_(BACKFILL_IMGS_);
-        }
+    /**
+     * Prefetches and preconnects URLs related to the ad.
+     * @override
+     */
+    preconnectCallback(onLayout) {
+      // We always need the bootstrap.
+      prefetchBootstrap(this.getWin());
+      const type = this.element.getAttribute('type');
+      const prefetch = adPrefetch[type];
+      const preconnect = adPreconnect[type];
+      if (typeof prefetch == 'string') {
+        this.preconnect.prefetch(prefetch);
+      } else if (prefetch) {
+        prefetch.forEach(p => {
+          this.preconnect.prefetch(p);
+        });
       }
+      if (typeof preconnect == 'string') {
+        this.preconnect.url(preconnect, onLayout);
+      } else if (preconnect) {
+        preconnect.forEach(p => {
+          this.preconnect.url(p, onLayout);
+        });
+      }
+      // If fully qualified src for ad script is specified we preconnect to it.
+      const src = this.element.getAttribute('src');
+      if (src) {
+        // We only preconnect to the src because we cannot know whether the URL
+        // will have caching headers set.
+        this.preconnect.url(src);
+      }
+    }
+
+    /**
+     * @override
+     */
+    onLayoutMeasure() {
+      this.isInFixedContainer_ = this.isPositionFixed();
+      // We remeasured this tag, lets also remeasure the iframe. Should be
+      // free now and it might have changed.
+      this.measureIframeLayoutBox_();
+      // When the framework has the need to remeasure us, our position might
+      // have changed. Send an intersection record if needed. This does nothing
+      // if we aren't currently in view.
+      if (this.intersectionObserver_) {
+        this.intersectionObserver_.fire();
+      }
+    }
+
+    /**
+     * Measure the layout box of the iframe if we rendered it already.
+     * @private
+     */
+    measureIframeLayoutBox_() {
+      if (this.iframe_) {
+        this.iframeLayoutBox_ =
+            this.getViewport().getLayoutRect(this.iframe_);
+      }
+    }
+
+    /**
+     * @override
+     */
+    getInsersectionElementLayoutBox() {
+      if (!this.iframeLayoutBox_) {
+        this.measureIframeLayoutBox_();
+      }
+      return this.iframeLayoutBox_;
+    }
+
+    /**
+     * @return {boolean} whether this element or its ancestors have position
+     * fixed (unless they are POSITION_FIXED_TAG_WHITELIST).
+     * This should only be called when a layout on the page was just forced
+     * anyway.
+     */
+    isPositionFixed() {
+      let el = this.element;
+      const body = el.ownerDocument.body;
+      do {
+        if (POSITION_FIXED_TAG_WHITELIST[el.tagName]) {
+          return false;
+        }
+        if (this.getWin()/*because only called from onLayoutMeasure */
+            ./*OK*/getComputedStyle(el).position == 'fixed') {
+          return true;
+        }
+        el = el.parentNode;
+      } while (el.getAttribute && el != body);
+      return false;
     }
 
     /** @override */
     layoutCallback() {
+      this.maybeUnpause_();
       if (!this.iframe_) {
-        this.iframe_ = getIframe(this.element.ownerDocument.defaultView,
-            this.element);
-        this.applyFillContent(this.iframe_);
-        this.element.appendChild(this.iframe_);
-
-        // Triggered by context.noContentAvailable() inside the ad iframe.
-        listen(this.iframe_, 'no-content', () => {
-          // NOTE(erwinm): guard against an iframe firing off no-content twice.
-          // since there is currently no way to `unlisten`.
-          if (this.isDefaultPlaceholder_ && !this.isDefaultPlaceholderSet_) {
-            this.setDefaultPlaceholder_();
-            this.element.appendChild(this.placeholder_);
-            this.element.removeChild(this.iframe_);
-            this.isDefaultPlaceholderSet_ = true;
+        loadingAdsCount++;
+        assert(!this.isInFixedContainer_,
+            '<amp-ad> is not allowed to be placed in elements with ' +
+            'position:fixed: %s', this.element);
+        timer.delay(() => {
+          // Unfortunately we don't really have a good way to measure how long it
+          // takes to load an ad, so we'll just pretend it takes 1 second for
+          // now.
+          loadingAdsCount--;
+        }, 1000);
+        return this.getAdCid_().then(cid => {
+          if (cid) {
+            this.element.setAttribute('ampcid', cid);
           }
-          this.placeholder_.classList.remove('hidden');
+          this.iframe_ = getIframe(this.element.ownerDocument.defaultView,
+            this.element);
+          this.iframe_.setAttribute('scrolling', 'no');
+          this.applyFillContent(this.iframe_);
+          this.element.appendChild(this.iframe_);
+          this.intersectionObserver_ =
+              new IntersectionObserver(this, this.iframe_, /* opt_is3P */true);
+          // Triggered by context.noContentAvailable() inside the ad iframe.
+          listenOnce(this.iframe_, 'no-content', () => {
+            this.noContentHandler_();
+          }, /* opt_is3P */ true);
+          // Triggered by context.reportRenderedEntityIdentifier(…) inside the ad
+          // iframe.
+          listenOnce(this.iframe_, 'entity-id', info => {
+            this.element.setAttribute('creative-id', info.id);
+          }, /* opt_is3P */ true);
+          listen(this.iframe_, 'embed-size', data => {
+            if (data.width !== undefined) {
+              this.iframe_.width = data.width;
+              this.element.setAttribute('width', data.width);
+            }
+            if (data.height !== undefined) {
+              const newHeight = Math.max(this.element./*OK*/offsetHeight +
+                  data.height - this.iframe_./*OK*/offsetHeight, data.height);
+              this.iframe_.height = data.height;
+              this.element.setAttribute('height', newHeight);
+              this.updateHeight_(newHeight);
+            }
+          }, /* opt_is3P */ true);
+          this.iframe_.style.visibility = 'hidden';
+          listenOnce(this.iframe_, 'render-start', () => {
+            this.iframe_.style.visibility = '';
+            this.sendEmbedInfo_(this.isInViewport());
+          }, /* opt_is3P */ true);
+          this.viewer_.onVisibilityChanged(() => {
+            this.sendEmbedInfo_(this.isInViewport());
+          });
+
+          return loadPromise(this.iframe_);
         });
       }
       return loadPromise(this.iframe_);
     }
 
+    /** @override */
+    documentInactiveCallback() {
+      this.maybePause_();
+      // Call layoutCallback again when this document becomes active.
+      return true;
+    }
+
     /**
-     * This is a preview-phase only thing where if the ad says that it
-     * cannot fill the slot we select from a small set of default
-     * banners.
+     * @return {!Promise<string|undefined>} A promise for a CID or undefined if
+     *     - the ad network does not request one or
+     *     - `amp-analytics` which provides the CID service was not installed.
      * @private
-     * @visibleForTesting
      */
-    setDefaultPlaceholder_() {
-      var a = document.createElement('a');
-      a.href = 'https://www.ampproject.org';
-      a.target = '_blank';
-      a.setAttribute('placeholder', '');
-      a.classList.add('hidden');
-      var img = new Image();
-      setStyles(img, {
-        width: 'auto',
-        height: '100%',
-        margin: 'auto',
+    getAdCid_() {
+      const scope = clientIdScope[this.element.getAttribute('type')];
+      if (!scope) {
+        return Promise.resolve();
+      }
+      return cidForOrNull(this.getWin()).then(cidService => {
+        if (!cidService) {
+          return Promise.resolve();
+        }
+        let consent = Promise.resolve();
+        const consentId = this.element.getAttribute(
+            'data-consent-notification-id');
+        if (consentId) {
+          consent = userNotificationManagerFor(this.win).then(service => {
+            return service.get(consentId);
+          });
+        }
+        return cidService.get(scope, consent);
       });
+    }
 
-      let winner = this.getPlaceholderImage_();
-      img.src = `https://ampproject.org/backfill/${winner}`;
-      this.placeholder_ = a;
-      a.appendChild(img);
+    /** @override  */
+    viewportCallback(inViewport) {
+      if (inViewport) {
+        this.wasEverVisible_ = true;
+        this.maybeUnpause_();
+      } else {
+        this.maybePause_();
+      }
+      if (this.intersectionObserver_) {
+        this.intersectionObserver_.onViewportCallback(inViewport);
+      }
+      this.sendEmbedInfo_(inViewport);
     }
 
     /**
-     * Picks a random backfill image for the case that no real ad can be
-     * shown.
+     * Unpauses the ad if it is paused.
      * @private
-     * @return {string} The image URL.
      */
-    getPlaceholderImage_() {
-      let scores = scoreDimensions_(BACKFILL_DIMENSIONS_,
-          this.element.clientWidth, this.element.clientHeight);
-      let dims = BACKFILL_DIMENSIONS_[scores.indexOf(Math.max(...scores))];
-      let images = BACKFILL_IMGS_[dims.join('x')];
-      // do we need a more sophisticated randomizer?
-      return images[Math.floor(Math.random() * images.length)];
+    maybeUnpause_() {
+      if (this.paused_) {
+        this.paused_ = false;
+        toggle(this.iframe_, true);
+      }
     }
-  };
+
+    /**
+     * Pauses the ad unless
+     * - it was never visible and the viewport is visible.
+     * We have that exception because setting `diplay:none` can break some
+     * measurements inside the ad and these are more likely to occur early
+     * in the ad lifecycle. We could probably enhance this by still hiding
+     * ads that have been loaded for a while (Say 10 seconds).
+     * @private
+     */
+    maybePause_() {
+      if (!this.wasEverVisible_ && this.viewer_.isVisible()) {
+        return;
+      }
+      // We only pause ads that have been visible before
+      if (this.iframe_ && !this.paused_) {
+        this.paused_ = true;
+        // When the doc is inactive, hide the ads, so any work they do takes
+        // less CPU and power.
+        toggle(this.iframe_, false);
+      }
+    }
+
+    /**
+     * @param {boolean} inViewport
+     * @private
+     */
+    sendEmbedInfo_(inViewport) {
+      if (this.iframe_) {
+        const targetOrigin =
+            this.iframe_.src ? parseUrl(this.iframe_.src).origin : '*';
+        postMessage(this.iframe_, 'embed-state', {
+          inViewport: inViewport,
+          pageHidden: !this.viewer_.isVisible(),
+        }, targetOrigin, /* opt_is3P */ true);
+      }
+    }
+
+    /** @override  */
+    overflowCallback(overflown, requestedHeight) {
+      if (overflown) {
+        const targetOrigin =
+            this.iframe_.src ? parseUrl(this.iframe_.src).origin : '*';
+        postMessage(
+            this.iframe_,
+            'embed-size-denied',
+            {requestedHeight: requestedHeight},
+            targetOrigin,
+            /* opt_is3P */ true);
+      }
+    }
+
+    /**
+     * Updates the elements height to accommodate the iframe's requested height.
+     * @param {number} newHeight
+     * @private
+     */
+    updateHeight_(newHeight) {
+      this.attemptChangeHeight(newHeight, () => {
+        const targetOrigin =
+            this.iframe_.src ? parseUrl(this.iframe_.src).origin : '*';
+        postMessage(
+            this.iframe_,
+            'embed-size-changed',
+            {requestedHeight: newHeight},
+            targetOrigin,
+            /* opt_is3P */ true);
+      });
+    }
+
+    /**
+     * Activates the fallback if the ad reports that the ad slot cannot
+     * be filled.
+     * @private
+     */
+    noContentHandler_() {
+      // If a fallback does not exist attempt to collapse the ad.
+      if (!this.fallback_) {
+        this.attemptChangeHeight(0, () => {
+          this.element.style.display = 'none';
+        });
+      }
+      this.deferMutate(() => {
+        if (this.fallback_) {
+          this.toggleFallback(true);
+        }
+        this.element.removeChild(this.iframe_);
+      });
+    }
+  }
 
   registerElement(win, 'amp-ad', AmpAd);
 }

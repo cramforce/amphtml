@@ -8,31 +8,31 @@ stage it, test it, and get it ready for publication.
 The basic AMP HTML page includes the following mark-up:
 
 ```html
-    <!doctype html>
-    <html AMP lang="en">
-      <head>
-        <meta charset="utf-8">
-        <title>Hello, AMPs</title>
-        <link rel="canonical" href="http://example.ampproject.org/article-metadata.html" />
-        <script src="https://cdn.ampproject.org/v0.js" async></script>
-        <meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,minimal-ui">
-        <script type="application/ld+json">
-          {
-            "@context": "http://schema.org",
-            "@type": "NewsArticle",
-            "headline": "Open-source framework for publishing content everywhere",
-            "datePublished": "2015-10-07T12:02:41Z",
-            "image": [
-              "logo.jpg"
-            ]
-          }
-        </script>
-        <style>body {opacity: 0}</style><noscript><style>body {opacity: 1}</style></noscript>
-      </head>
-      <body>
-        <h1>Welcome to the mobile web</h1>
-      </body>
-    </html>
+<!doctype html>
+<html amp lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Hello, AMPs</title>
+    <link rel="canonical" href="http://example.ampproject.org/article-metadata.html" />
+    <meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1">
+    <script type="application/ld+json">
+      {
+        "@context": "http://schema.org",
+        "@type": "NewsArticle",
+        "headline": "Open-source framework for publishing content",
+        "datePublished": "2015-10-07T12:02:41Z",
+        "image": [
+          "logo.jpg"
+        ]
+      }
+    </script>
+    <style amp-boilerplate>body{-webkit-animation:-amp-start 8s steps(1,end) 0s 1 normal both;-moz-animation:-amp-start 8s steps(1,end) 0s 1 normal both;-ms-animation:-amp-start 8s steps(1,end) 0s 1 normal both;animation:-amp-start 8s steps(1,end) 0s 1 normal both}@-webkit-keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}@-moz-keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}@-ms-keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}@-o-keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}@keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}</style><noscript><style amp-boilerplate>body{-webkit-animation:none;-moz-animation:none;-ms-animation:none;animation:none}</style></noscript>
+    <script async src="https://cdn.ampproject.org/v0.js"></script>
+  </head>
+  <body>
+    <h1>Welcome to the mobile web</h1>
+  </body>
+</html>
 ```
 
 ## Required mark-up
@@ -44,9 +44,9 @@ AMP HTML documents MUST
 - <a name="crps"></a>contain `<head>` and `<body>` tags (They are optional in HTML).
 - <a name="canon"></a>contain a `<link rel="canonical" href="$SOME_URL" />` tag inside their head that points to the regular HTML version of the AMP HTML document or to itself if no such HTML version exists.
 - <a name="chrs"></a>contain a `<meta charset="utf-8">` tag as the first child of their head tag.
-- <a name="vprt"></a>contain a `<meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,minimal-ui">` tag inside their head tag.
-- <a name="scrpt"></a>contain a `<script src="https://cdn.ampproject.org/v0.js" async></script>` tag as the last element in their head.
-- <a name="opacity"></a>contain `<style>body {opacity: 0}</style><noscript><style>body {opacity: 1}</style></noscript>` in their head tag.
+- <a name="vprt"></a>contain a `<meta name="viewport" content="width=device-width,minimum-scale=1">` tag inside their head tag. It's also recommended to include `initial-scale=1`.
+- <a name="scrpt"></a>contain a `<script async src="https://cdn.ampproject.org/v0.js"></script>` tag as the last element in their head.
+- <a name="boilerplate"></a>contain the [AMP boilerplate code](../spec/amp-boilerplate.md) in their head tag.
 
 Most HTML tags can be used unchanged in AMP HTML.
 Certain tags have equivalent custom AMP HTML tags;
@@ -60,33 +60,32 @@ To get you started,
 here's the basic AMP HTML page now with an image:
 
 ```html
-    <!doctype html>
-    <html AMP lang="en">
-      <head>
-        <meta charset="utf-8">
-        <title>Hello, AMPs</title>
-        <link rel="canonical" href="http://example.ampproject.org/article-metadata.html" />
-        <script src="https://cdn.ampproject.org/v0.js" async></script>
-        <meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,minimal-ui">
-        <script type="application/ld+json">
-          {
-            "@context": "http://schema.org",
-            "@type": "NewsArticle",
-            "headline": "Open-source framework for publishing content everywhere",
-            "datePublished": "2015-10-07T12:02:41Z",
-            "image": [
-              "logo.jpg"
-            ]
-          }
-        </script>
-        <style>body {opacity: 0}</style><noscript><style>body {opacity: 1}</style></noscript>
-      </head>
-      <body>
-        <h1>Welcome to the mobile web</h1>
-        <amp-img src="welcome.jpg" alt="Welcome" height="2000" width="800"></amp-img>
-
-      </body>
-    </html>
+<!doctype html>
+<html amp lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Hello, AMPs</title>
+    <link rel="canonical" href="http://example.ampproject.org/article-metadata.html" />
+    <meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1">
+    <script type="application/ld+json">
+      {
+        "@context": "http://schema.org",
+        "@type": "NewsArticle",
+        "headline": "Open-source framework for publishing content everywhere",
+        "datePublished": "2015-10-07T12:02:41Z",
+        "image": [
+          "logo.jpg"
+        ]
+      }
+    </script>
+    <style amp-boilerplate>body{-webkit-animation:-amp-start 8s steps(1,end) 0s 1 normal both;-moz-animation:-amp-start 8s steps(1,end) 0s 1 normal both;-ms-animation:-amp-start 8s steps(1,end) 0s 1 normal both;animation:-amp-start 8s steps(1,end) 0s 1 normal both}@-webkit-keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}@-moz-keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}@-ms-keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}@-o-keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}@keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}</style><noscript><style amp-boilerplate>body{-webkit-animation:none;-moz-animation:none;-ms-animation:none;animation:none}</style></noscript>
+    <script async src="https://cdn.ampproject.org/v0.js"></script>
+  </head>
+  <body>
+    <h1>Welcome to the mobile web</h1>
+    <amp-img src="welcome.jpg" alt="Welcome" height="2000" width="800"></amp-img>
+  </body>
+</html>
 ```
 
 Learn more about
@@ -98,45 +97,44 @@ AMPs are web pages; add custom styling using common CSS properties.
 
 Style elements inside `<style amp-custom>`
 using class or element selectors in an author-defined,
-inlined stylesheet: 
+inlined stylesheet:
 
 ```html
-    <!doctype html>
-    <html AMP lang="en">
-      <head>
-        <meta charset="utf-8">
-        <title>Hello, AMPs</title>
-        <link rel="canonical" href="http://example.ampproject.org/article-metadata.html" />
-        <script src="https://cdn.ampproject.org/v0.js" async></script>
-        <meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,minimal-ui">
-        <script type="application/ld+json">
-          {
-            "@context": "http://schema.org",
-            "@type": "NewsArticle",
-            "headline": "Open-source framework for publishing content everywhere",
-            "datePublished": "2015-10-07T12:02:41Z",
-            "image": [
-              "logo.jpg"
-            ]
-          }
-        </script>
-        <style>body {opacity: 0}</style><noscript><style>body {opacity: 1}</style></noscript>
-        <style amp-custom>
-          <!-- any custom style goes here; and remember, body margin can not be declared -->
-          body {
-            background-color: white;
-          }
-          amp-img {
-            background-color: gray;
-          }
-        </style>
-      </head>
-      <body>
-        <h1>Welcome to the mobile web</h1>
-        <amp-img src="welcome.jpg" alt="Welcome" height="2000" width="800"></amp-img>
-
-      </body>
-    </html>
+<!doctype html>
+<html amp lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Hello, AMPs</title>
+    <link rel="canonical" href="http://example.ampproject.org/article-metadata.html" />
+    <meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1">
+    <script type="application/ld+json">
+      {
+        "@context": "http://schema.org",
+        "@type": "NewsArticle",
+        "headline": "Open-source framework for publishing content everywhere",
+        "datePublished": "2015-10-07T12:02:41Z",
+        "image": [
+          "logo.jpg"
+        ]
+      }
+    </script>
+    <style amp-boilerplate>body{-webkit-animation:-amp-start 8s steps(1,end) 0s 1 normal both;-moz-animation:-amp-start 8s steps(1,end) 0s 1 normal both;-ms-animation:-amp-start 8s steps(1,end) 0s 1 normal both;animation:-amp-start 8s steps(1,end) 0s 1 normal both}@-webkit-keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}@-moz-keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}@-ms-keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}@-o-keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}@keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}</style><noscript><style amp-boilerplate>body{-webkit-animation:none;-moz-animation:none;-ms-animation:none;animation:none}</style></noscript>
+    <style amp-custom>
+      /* any custom style goes here; and remember, body margin can not be declared */
+      body {
+        background-color: white;
+      }
+      amp-img {
+        background-color: gray;
+      }
+    </style>
+    <script async src="https://cdn.ampproject.org/v0.js"></script>
+  </head>
+  <body>
+    <h1>Welcome to the mobile web</h1>
+    <amp-img src="welcome.jpg" alt="Welcome" height="2000" width="800"></amp-img>
+  </body>
+</html>
 ```
 
 Learn more about adding elements, including extended components,
@@ -148,7 +146,7 @@ Externally-loaded resources (like images, ads, videos, etc.) must have height
 and width attributes.  This ensures that sizes of all elements can be
 calculated by the browser via CSS automatically and element sizes won't be
 recalculated because of external resources, preventing the page from jumping
-and around as resources load.
+around as resources load.
 
 Moreover, use of the style attribute for tags is not permitted, as this
 optimizes impact rendering speed in unpredictable ways.
@@ -170,9 +168,9 @@ and validating the page using the
 2. Get your web server up and running locally.
 For a quick web server, run `python -m SimpleHTTPServer`.
 4. Open your page, for example, go to
-[http://localhost:8000/examples/hello-AMP-HTML.html](http://localhost:8000/examples/hello-AMP-HTML.html).
+[http://localhost:8000/released.amp.html](http://localhost:8000/released.amp.html).
 5. Add "#development=1" to the URL, for example,
-[http://localhost:8000/examples/hello-AMP-HTML.html#development=1](http://localhost:8000/examples/hello-AMP-HTML.html#development=1).
+[http://localhost:8000/released.amp.html#development=1](http://localhost:8000/released.amp.html#development=1).
 6. Open the Chrome DevTools console and check for validation errors.
 
 <!--

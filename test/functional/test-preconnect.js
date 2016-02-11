@@ -23,6 +23,10 @@ describe('preconnect', () => {
   let clock;
   let preconnect;
 
+  // Factored out to make our linter happy since we don't allow
+  // bare javascript URLs.
+  const javascriptUrlPrefix = 'javascript';
+
   beforeEach(() => {
     sandbox = sinon.sandbox.create();
     clock = sandbox.useFakeTimers();
@@ -30,14 +34,16 @@ describe('preconnect', () => {
   });
 
   afterEach(() => {
-    clock.tick(20000);
-    clock.restore();
+    clock.tick(200000);
     sandbox.restore();
   });
 
   it('should preconnect', () => {
+    sandbox.stub(preconnect.platform_, 'isSafari', () => false);
+    const open = sandbox.spy(XMLHttpRequest.prototype, 'open');
     preconnect.url('https://a.preconnect.com/foo/bar');
     preconnect.url('https://a.preconnect.com/other');
+    preconnect.url(javascriptUrlPrefix + ':alert()');
     expect(document.querySelectorAll('link[rel=dns-prefetch]'))
         .to.have.length(1);
     expect(document.querySelector('link[rel=dns-prefetch]').href)
@@ -46,6 +52,33 @@ describe('preconnect', () => {
         .to.have.length(1);
     expect(document.querySelector('link[rel=preconnect]').href)
         .to.equal('https://a.preconnect.com/');
+    expect(document.querySelectorAll('link[rel=prefetch]'))
+        .to.have.length(0);
+    expect(open.callCount).to.equal(0);
+  });
+
+  it('should preconnect with polyfill', () => {
+    sandbox.stub(preconnect.platform_, 'isSafari', () => true);
+    const open = sandbox.spy(XMLHttpRequest.prototype, 'open');
+    const send = sandbox.spy(XMLHttpRequest.prototype, 'send');
+    preconnect.url('https://s.preconnect.com/foo/bar');
+    preconnect.url('https://s.preconnect.com/other');
+    preconnect.url(javascriptUrlPrefix + ':alert()');
+    expect(document.querySelectorAll('link[rel=dns-prefetch]'))
+        .to.have.length(1);
+    expect(document.querySelector('link[rel=dns-prefetch]').href)
+        .to.equal('https://s.preconnect.com/');
+    expect(document.querySelectorAll('link[rel=preconnect]'))
+        .to.have.length(1);
+    expect(document.querySelector('link[rel=preconnect]').href)
+        .to.equal('https://s.preconnect.com/');
+    expect(document.querySelectorAll('link[rel=prefetch]'))
+        .to.have.length(0);
+    expect(open.callCount).to.equal(1);
+    expect(send.callCount).to.equal(1);
+    expect(open.args[0][1]).to.include(
+        'https://s.preconnect.com/amp_preconnect_polyfill_404_or' +
+        '_other_error_expected._Do_not_worry_about_it');
   });
 
   it('should cleanup', () => {
@@ -78,5 +111,61 @@ describe('preconnect', () => {
         .to.equal('https://e.preconnect.com/');
     expect(document.querySelectorAll('link[rel=preconnect]'))
         .to.have.length(2);
+  });
+
+  it('should timeout preconnects', () => {
+    preconnect.url('https://x.preconnect.com/foo/bar');
+    expect(document.querySelectorAll('link[rel=preconnect]'))
+        .to.have.length(1);
+    clock.tick(9000);
+    preconnect.url('https://x.preconnect.com/foo/bar');
+    expect(document.querySelectorAll('link[rel=preconnect]'))
+        .to.have.length(1);
+    clock.tick(1000);
+    expect(document.querySelectorAll('link[rel=preconnect]'))
+        .to.have.length(0);
+    // After timeout preconnect creates a new tag.
+    preconnect.url('https://x.preconnect.com/foo/bar');
+    expect(document.querySelectorAll('link[rel=preconnect]'))
+        .to.have.length(1);
+  });
+
+  it('should timeout preconnects longer with active connect', () => {
+    preconnect.url('https://y.preconnect.com/foo/bar',
+        /* opt_alsoConnecting */ true);
+    expect(document.querySelectorAll('link[rel=preconnect]'))
+        .to.have.length(1);
+    clock.tick(10000);
+    expect(document.querySelectorAll('link[rel=preconnect]'))
+        .to.have.length(0);
+    preconnect.url('https://y.preconnect.com/foo/bar');
+    expect(document.querySelectorAll('link[rel=preconnect]'))
+        .to.have.length(0);
+    clock.tick(180 * 1000);
+    preconnect.url('https://y.preconnect.com/foo/bar');
+    expect(document.querySelectorAll('link[rel=preconnect]'))
+        .to.have.length(1);
+  });
+
+  it('should prefetch', () => {
+    preconnect.prefetch('https://a.prefetch.com/foo/bar');
+    preconnect.prefetch('https://a.prefetch.com/foo/bar');
+    preconnect.prefetch('https://a.prefetch.com/other');
+    preconnect.prefetch(javascriptUrlPrefix + ':alert()');
+    // Also preconnects.
+    expect(document.querySelectorAll('link[rel=dns-prefetch]'))
+        .to.have.length(1);
+    expect(document.querySelector('link[rel=dns-prefetch]').href)
+        .to.equal('https://a.prefetch.com/');
+    expect(document.querySelectorAll('link[rel=preconnect]'))
+        .to.have.length(1);
+    expect(document.querySelector('link[rel=preconnect]').href)
+        .to.equal('https://a.prefetch.com/');
+    // Actual prefetch
+    const fetches = document.querySelectorAll(
+        'link[rel=prefetch]');
+    expect(fetches).to.have.length(2);
+    expect(fetches[0].href).to.equal('https://a.prefetch.com/foo/bar');
+    expect(fetches[1].href).to.equal('https://a.prefetch.com/other');
   });
 });

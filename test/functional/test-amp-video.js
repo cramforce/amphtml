@@ -19,24 +19,36 @@ import {installVideo} from '../../builtins/amp-video';
 
 describe('amp-video', () => {
 
+  let sandbox;
+
+  beforeEach(() => {
+    sandbox = sinon.sandbox.create();
+  });
+
+  afterEach(() => {
+    sandbox.restore();
+    sandbox = null;
+  });
+
   function getFooVideoSrc(mediatype) {
     return '//someHost/foo.' + mediatype.slice(mediatype.indexOf('/') + 1); // assumes no optional params
   }
 
-  function getVideo(attributes, children) {
-    return createIframePromise().then((iframe) => {
-      installVideo(iframe.win);
-      var v = iframe.doc.createElement('amp-video');
-      for (let key in attributes) {
-        v.setAttribute(key, attributes[key]);
-      }
-      if (children != null) {
-        for (let key in children) {
-          v.appendChild(children[key]);
-        }
-      }
-      return iframe.addElement(v);
-    });
+  function getVideo(attributes, children, opt_beforeLayoutCallback) {
+    return createIframePromise(
+        true, opt_beforeLayoutCallback).then(iframe => {
+          installVideo(iframe.win);
+          const v = iframe.doc.createElement('amp-video');
+          for (const key in attributes) {
+            v.setAttribute(key, attributes[key]);
+          }
+          if (children != null) {
+            for (const key in children) {
+              v.appendChild(children[key]);
+            }
+          }
+          return iframe.addElement(v);
+        });
   }
 
   it('should load a video', () => {
@@ -45,7 +57,7 @@ describe('amp-video', () => {
       width: 160,
       height: 90
     }).then(v => {
-      var video = v.querySelector('video');
+      const video = v.querySelector('video');
       expect(video).to.be.an.instanceof(Element);
       expect(video.tagName).to.equal('VIDEO');
       expect(video.getAttribute('src')).to.equal('video.mp4');
@@ -63,7 +75,7 @@ describe('amp-video', () => {
       'muted': '',
       'loop': ''
     }).then(v => {
-      var video = v.querySelector('video');
+      const video = v.querySelector('video');
       expect(video).to.be.an.instanceof(Element);
       expect(video.tagName).to.equal('VIDEO');
       expect(video.hasAttribute('controls')).to.be.true;
@@ -74,12 +86,12 @@ describe('amp-video', () => {
   });
 
   it('should load a video with source children', () => {
-    var sources = [];
-    var mediatypes = ['video/ogg', 'video/mp4', 'video/webm'];
-    for (var i = 0; i < mediatypes.length; i++) {
-      var mediatype = mediatypes[i];
-      var source = document.createElement('source');
-      source.setAttribute('src',  getFooVideoSrc(mediatype));
+    const sources = [];
+    const mediatypes = ['video/ogg', 'video/mp4', 'video/webm'];
+    for (let i = 0; i < mediatypes.length; i++) {
+      const mediatype = mediatypes[i];
+      const source = document.createElement('source');
+      source.setAttribute('src', getFooVideoSrc(mediatype));
       source.setAttribute('type', mediatype);
       sources.push(source);
     }
@@ -92,11 +104,11 @@ describe('amp-video', () => {
       'muted': '',
       'loop': ''
     }, sources).then(v => {
-      var video = v.querySelector('video');
+      const video = v.querySelector('video');
       // check that the source tags were propogated
       expect(video.children.length).to.equal(mediatypes.length);
-      for (var i = 0; i < mediatypes.length; i++) {
-        var mediatype = mediatypes[i];
+      for (let i = 0; i < mediatypes.length; i++) {
+        const mediatype = mediatypes[i];
         expect(video.children.item(i).tagName).to.equal('SOURCE');
         expect(video.children.item(i).hasAttribute('src')).to.be.true;
         expect(video.children.item(i).getAttribute('src'))
@@ -107,11 +119,11 @@ describe('amp-video', () => {
   });
 
   it('should not load a video with http source children', () => {
-    var sources = [];
-    var mediatypes = ['video/ogg', 'video/mp4', 'video/webm'];
-    for (var i = 0; i < mediatypes.length; i++) {
-      var mediatype = mediatypes[i];
-      var source = document.createElement('source');
+    const sources = [];
+    const mediatypes = ['video/ogg', 'video/mp4', 'video/webm'];
+    for (let i = 0; i < mediatypes.length; i++) {
+      const mediatype = mediatypes[i];
+      const source = document.createElement('source');
       source.setAttribute('src', 'http:' + getFooVideoSrc(mediatype));
       source.setAttribute('type', mediatype);
       sources.push(source);
@@ -125,6 +137,107 @@ describe('amp-video', () => {
       'muted': '',
       'loop': ''
     }, sources)).to.be.rejectedWith(/start with/);
+  });
+
+  it('should not set src or preload in prerender mode', () => {
+    return getVideo({
+      src: 'video.mp4',
+      width: 160,
+      height: 90,
+      'preload': 'auto',
+      'poster': 'img.png'
+    }, null, function(element) {
+      const video = element.querySelector('video');
+      expect(video.getAttribute('preload')).to.equal('none');
+      expect(video.getAttribute('poster')).to.equal('img.png');
+      expect(video.hasAttribute('src')).to.be.false;
+    }).then(v => {
+      // Should set appropriate attributes in layoutCallback.
+      const video = v.querySelector('video');
+      expect(video).to.be.an.instanceof(Element);
+      expect(video.tagName).to.equal('VIDEO');
+      expect(video.getAttribute('preload')).to.equal('auto');
+      expect(video.getAttribute('poster')).to.equal('img.png');
+    });
+  });
+
+  it('should remove preload attribute when not provided', () => {
+    return getVideo({
+      src: 'video.mp4',
+      width: 160,
+      height: 90,
+      'poster': 'img.png'
+    }, null, function(element) {
+      const video = element.querySelector('video');
+      expect(video.getAttribute('preload')).to.equal('none');
+      expect(video.getAttribute('poster')).to.equal('img.png');
+      expect(video.hasAttribute('src')).to.be.false;
+    }).then(v => {
+      // Should set appropriate attributes in layoutCallback.
+      const video = v.querySelector('video');
+      expect(video).to.be.an.instanceof(Element);
+      expect(video.tagName).to.equal('VIDEO');
+      expect(video.hasAttribute('preload')).to.be.false;
+      expect(video.getAttribute('poster')).to.equal('img.png');
+    });
+  });
+
+  it('should not load a video with source children in prerender mode', () => {
+    const sources = [];
+    const mediatypes = ['video/ogg', 'video/mp4', 'video/webm'];
+    for (let i = 0; i < mediatypes.length; i++) {
+      const mediatype = mediatypes[i];
+      const source = document.createElement('source');
+      source.setAttribute('src', getFooVideoSrc(mediatype));
+      source.setAttribute('type', mediatype);
+      sources.push(source);
+    }
+    return getVideo({
+      src: 'video.mp4',
+      width: 160,
+      height: 90,
+      'controls': '',
+      'autoplay': '',
+      'muted': '',
+      'loop': ''
+    }, sources, function(element) {
+      const video = element.querySelector('video');
+      expect(video.children.length).to.equal(0);
+    }).then(v => {
+      // Should add attributes and source children in layoutCallback.
+      const video = v.querySelector('video');
+      // check that the source tags were propogated
+      expect(video.children.length).to.equal(mediatypes.length);
+      for (let i = 0; i < mediatypes.length; i++) {
+        const mediatype = mediatypes[i];
+        expect(video.children.item(i).tagName).to.equal('SOURCE');
+        expect(video.children.item(i).hasAttribute('src')).to.be.true;
+        expect(video.children.item(i).getAttribute('src'))
+            .to.equal(getFooVideoSrc(mediatype));
+        expect(video.children.item(i).getAttribute('type')).to.equal(mediatype);
+      }
+    });
+  });
+
+  it('should set src and preload in non-prerender mode', () => {
+    return getVideo({
+      src: 'video.mp4',
+      width: 160,
+      height: 90,
+      'preload': 'auto',
+      'poster': 'img.png'
+    }, null, function(element) {
+      const video = element.querySelector('video');
+      expect(video.getAttribute('preload')).to.equal('none');
+      expect(video.getAttribute('poster')).to.equal('img.png');
+      expect(video.hasAttribute('src')).to.be.false;
+    }).then(v => {
+      const video = v.querySelector('video');
+      expect(video).to.be.an.instanceof(Element);
+      expect(video.tagName).to.equal('VIDEO');
+      expect(video.getAttribute('preload')).to.equal('auto');
+      expect(video.getAttribute('poster')).to.equal('img.png');
+    });
   });
 
 });

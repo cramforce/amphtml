@@ -14,23 +14,60 @@
  * limitations under the License.
  */
 
-import {getService} from '../../src/service';
+import {
+  getService,
+  getServicePromise,
+  resetServiceForTesting
+} from '../../src/service';
 
-describe('service`', () => {
+describe('service', () => {
 
-  var count = 1;
+  let count = 1;
   function inc() {
     return count++;
   }
 
+  beforeEach(() => {
+    resetServiceForTesting(window, 'a');
+    resetServiceForTesting(window, 'b');
+    resetServiceForTesting(window, 'c');
+    resetServiceForTesting(window, 'e1');
+  });
+
   it('should make per window singletons', () => {
-    var a1 = getService(window, 'a', inc);
-    var a2 = getService(window, 'a', inc);
+    const a1 = getService(window, 'a', inc);
+    const a2 = getService(window, 'a', inc);
     expect(a1).to.equal(a2);
     expect(a1).to.equal(1);
-    var b1 = getService(window, 'b', inc);
-    var b2 = getService(window, 'b', inc);
+    const b1 = getService(window, 'b', inc);
+    const b2 = getService(window, 'b', inc);
     expect(b1).to.equal(b2);
     expect(b1).to.not.equal(a1);
+  });
+
+  it('should work without a factory', () => {
+    const c1 = getService(window, 'c', inc);
+    const c2 = getService(window, 'c');
+    expect(c1).to.equal(c2);
+  });
+
+  it('should fail without factory on initial setup', () => {
+    expect(() => {
+      getService(window, 'not-present');
+    }).to.throw(/Factory not given and service missing not-present/);
+  });
+
+  it('should provide a promise that resolves when registered', () => {
+    const p1 = getServicePromise(window, 'e1');
+    const p2 = getServicePromise(window, 'e1');
+    getService(window, 'e1', function() {
+      return 'from e1';
+    });
+    return p1.then(s1 => {
+      expect(s1).to.equal('from e1');
+      return p2.then(s2 => {
+        expect(s2).to.equal(s1);
+      });
+    });
   });
 });
